@@ -308,14 +308,14 @@ config SND_SOC_SOF_HDA_PROBES
 	  Say Y if you want to enable probes.
 	  If unsure, select "N".
 
-config SND_SOC_SOF_HDA_ALWAYS_ENABLE_DMI_L1
-	bool "SOF enable DMI Link L1"
+config SND_SOC_SOF_HDA_DISABLE_REWINDS
+	bool "SOF Intel-HDA disable rewinds"
 	help
-	  This option enables DMI L1 for both playback and capture
-	  and disables known workarounds for specific HDAudio platforms.
-	  Only use to look into power optimizations on platforms not
-	  affected by DMI L1 issues. This option is not recommended.
-	  Say Y if you want to enable DMI Link L1
+	  This option disables ALSA rewinds for HDaudio platforms, which
+	  will help enable power savings capabilities.
+	  ALSA rewinds are only used by PulseAudio, so can be disabled
+	  for all distributions relying on PipeWire, JACK or CRAS.
+	  Say Y if you want to disable rewinds.
 	  If unsure, select "N".
 
 endif ## SND_SOC_SOF_HDA_COMMON

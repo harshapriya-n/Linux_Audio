@@ -660,6 +660,21 @@ int snd_soc_pcm_component_copy_user(struct snd_pcm_substream *substream,
 	return -EINVAL;
 }
 
+int snd_soc_pcm_component_ack(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
+	struct snd_soc_component *component;
+	int i;
+
+	/* FIXME. it returns 1st copy now */
+	for_each_rtd_components(rtd, i, component)
+		if (component->driver->ack)
+			return soc_component_ret(component,
+						 component->driver->ack(component, substream));
+
+	return -EINVAL;
+}
+
 struct page *snd_soc_pcm_component_page(struct snd_pcm_substream *substream,
 					unsigned long offset)
 {

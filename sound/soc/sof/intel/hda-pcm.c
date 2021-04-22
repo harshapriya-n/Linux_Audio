@@ -15,6 +15,7 @@
  * Hardware interface for generic Intel audio DSP HDA IP
  */
 
+#include <linux/moduleparam.h>
 #include <sound/hda_register.h>
 #include <sound/pcm_params.h>
 #include "../sof-audio.h"
@@ -26,6 +27,14 @@
 #define SDnFMT_DIV(x)	(((x) - 1) << 8)
 #define SDnFMT_BITS(x)	((x) << 4)
 #define SDnFMT_CHAN(x)	((x) << 0)
+
+static bool hda_always_enable_dmi_l1;
+module_param_named(always_enable_dmi_l1, hda_always_enable_dmi_l1, bool, 0444);
+MODULE_PARM_DESC(always_enable_dmi_l1, "SOF HDA always enable DMI l1");
+
+static bool hda_disable_rewinds = IS_ENABLED(CONFIG_SND_SOC_SOF_HDA_DISABLE_REWINDS);
+module_param_named(disable_rewinds, hda_disable_rewinds, bool, 0444);
+MODULE_PARM_DESC(disable_rewinds, "SOF HDA disable rewinds");
 
 u32 hda_dsp_get_mult_div(struct snd_sof_dev *sdev, int rate)
 {
@@ -114,8 +123,11 @@ int hda_dsp_pcm_hw_params(struct snd_sof_dev *sdev,
 		return ret;
 	}
 
-	/* disable SPIB, to enable buffer wrap for stream */
-	hda_dsp_stream_spib_config(sdev, stream, HDA_DSP_SPIB_DISABLE, 0);
+	/* enable SPIB when rewinds are disabled */
+	if (hda_disable_rewinds)
+		hda_dsp_stream_spib_config(sdev, stream, HDA_DSP_SPIB_ENABLE, 0);
+	else
+		hda_dsp_stream_spib_config(sdev, stream, HDA_DSP_SPIB_DISABLE, 0);
 
 	/* update no_period_irq flag for ipc params */
 	if (hda && hda->no_ipc_position)
@@ -126,11 +138,51 @@ int hda_dsp_pcm_hw_params(struct snd_sof_dev *sdev,
 	return 0;
 }
 
+/* update SPIB register with appl position */
+int hda_dsp_pcm_ack(struct snd_sof_dev *sdev, struct snd_pcm_substream *substream)
+{
+	struct hdac_stream *hstream = substream->runtime->private_data;
+	struct hdac_ext_stream *stream = stream_to_hdac_ext_stream(hstream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
+	ssize_t appl_pos, buf_size;
+	u32 spib;
+
+	if (!hda_disable_rewinds)
+		return 0;
+
+	/*
+	 * paranoia check: if a rewind request took place after the RUN bits were programmed,
+	 * deny it since hardware only supports monotonic (modulo) increments for SPIB.
+	 */
+	if (hstream->running) {
+		if (runtime->control->appl_ptr < stream->old_appl_ptr)
+			return -EINVAL;
+		stream->old_appl_ptr = runtime->control->appl_ptr;
+	}
+
+	appl_pos = frames_to_bytes(runtime, runtime->control->appl_ptr);
+	buf_size = frames_to_bytes(runtime, runtime->buffer_size);
+
+	spib = appl_pos % buf_size;
+
+	/* Allowable value for SPIB is 1 byte to max buffer size */
+	if (!spib)
+		spib = buf_size;
+       dev_dbg(sdev->dev, "ranjani updating spib %d\n", spib);
+
+	sof_io_write(sdev, stream->spib_addr, spib);
+
+	return 0;
+}
+
 int hda_dsp_pcm_trigger(struct snd_sof_dev *sdev,
 			struct snd_pcm_substream *substream, int cmd)
 {
 	struct hdac_stream *hstream = substream->runtime->private_data;
+	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct hdac_ext_stream *stream = stream_to_hdac_ext_stream(hstream);
+
+	stream->old_appl_ptr = runtime->control->appl_ptr;
 
 	return hda_dsp_stream_trigger(sdev, stream, cmd);
 }
@@ -207,6 +259,7 @@ int hda_dsp_pcm_open(struct snd_sof_dev *sdev,
 		     struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = asoc_substream_to_rtd(substream);
+	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_soc_component *scomp = sdev->component;
 	struct hdac_ext_stream *dsp_stream;
 	struct snd_sof_pcm *spcm;
@@ -219,8 +272,22 @@ int hda_dsp_pcm_open(struct snd_sof_dev *sdev,
 		return -EINVAL;
 	}
 
-	/* All playback and D0i3 compatible streams are DMI L1 capable */
-	if (direction == SNDRV_PCM_STREAM_PLAYBACK ||
+	/*
+	 * if we want the .ack to work, we need to prevent the status and
+	 * control from being mapped
+	 */
+	if (hda_disable_rewinds)
+		runtime->hw.info |= SNDRV_PCM_INFO_NO_STATUS_MMAP;
+
+	/*
+	 * All playback and D0i3 compatible streams are DMI L1 capable, others need
+	 * pause push/release to be disabled
+	 */
+	if (!(runtime->hw.info & SNDRV_PCM_INFO_PAUSE))
+		hda_always_enable_dmi_l1 = true;
+
+	if (hda_always_enable_dmi_l1 ||
+	    direction == SNDRV_PCM_STREAM_PLAYBACK ||
 	    spcm->stream[substream->stream].d0i3_compatible)
 		flags |= SOF_HDA_STREAM_DMI_L1_COMPATIBLE;
 

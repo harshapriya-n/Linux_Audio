@@ -10,6 +10,7 @@
 // PCM Layer, interface between ALSA and IPC.
 //
 
+#include <linux/moduleparam.h>
 #include <linux/pm_runtime.h>
 #include <sound/pcm_params.h>
 #include <sound/sof.h>
@@ -19,6 +20,10 @@
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_DEBUG_PROBES)
 #include "compress.h"
 #endif
+
+static bool pcm_disable_pause = IS_ENABLED(CONFIG_SND_SOC_SOF_PCM_DISABLE_PAUSE);
+module_param_named(disable_pause, pcm_disable_pause, bool, 0444);
+MODULE_PARM_DESC(disable_pause, "SOF HDA disable pause");
 
 /* Create DMA buffer page table for DSP */
 static int create_page_table(struct snd_soc_component *component,
@@ -488,6 +493,8 @@ static int sof_pcm_open(struct snd_soc_component *component,
 
 	/* set runtime config */
 	runtime->hw.info = ops->hw_info; /* platform-specific */
+	if (pcm_disable_pause)
+		runtime->hw.info &= ~SNDRV_PCM_INFO_PAUSE;
 
 	runtime->hw.formats = le64_to_cpu(caps->formats);
 	runtime->hw.period_bytes_min = le32_to_cpu(caps->period_size_min);
@@ -788,6 +795,14 @@ static void sof_pcm_remove(struct snd_soc_component *component)
 	snd_soc_tplg_component_remove(component, SND_SOC_TPLG_INDEX_ALL);
 }
 
+static int sof_pcm_ack(struct snd_soc_component *component,
+		       struct snd_pcm_substream *substream)
+{
+	struct snd_sof_dev *sdev = snd_soc_component_get_drvdata(component);
+
+	return snd_sof_pcm_platform_ack(sdev, substream);
+}
+
 void snd_sof_new_platform_drv(struct snd_sof_dev *sdev)
 {
 	struct snd_soc_component_driver *pd = &sdev->plat_drv;
@@ -806,6 +821,7 @@ void snd_sof_new_platform_drv(struct snd_sof_dev *sdev)
 	pd->hw_free = sof_pcm_hw_free;
 	pd->trigger = sof_pcm_trigger;
 	pd->pointer = sof_pcm_pointer;
+	pd->ack = sof_pcm_ack;
 
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_COMPRESS)
 	pd->compress_ops = &sof_compressed_ops;

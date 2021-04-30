@@ -665,7 +665,7 @@ static int hda_resume(struct snd_sof_dev *sdev, bool runtime_resume)
 	int ret;
 
 	/* display codec must be powered before link reset */
-	hda_codec_i915_display_power(sdev, true);
+	//hda_codec_i915_display_power(sdev, true);
 
 	/*
 	 * clear TCSEL to clear playback on some HD Audio
@@ -724,8 +724,6 @@ int hda_dsp_resume(struct snd_sof_dev *sdev)
 
 	/* resume from D0I3 */
 	if (sdev->dsp_power_state.state == SOF_DSP_PM_D0) {
-		hda_codec_i915_display_power(sdev, true);
-
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_HDA)
 		/* power up links that were active before suspend */
 		list_for_each_entry(hlink, &bus->hlink_list, list) {
@@ -955,7 +953,7 @@ void hda_dsp_d0i3_work(struct work_struct *work)
 	/* remain in D0I0 */
 	if (target_state.substate == SOF_HDA_DSP_PM_D0I0)
 		return;
-
+        hda_codec_i915_display_power(sdev, false);
 	/* This can fail but error cannot be propagated */
 	ret = snd_sof_dsp_set_power_state(sdev, &target_state);
 	if (ret < 0)

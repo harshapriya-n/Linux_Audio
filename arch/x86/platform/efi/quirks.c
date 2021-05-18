@@ -106,11 +106,11 @@ early_param("efi_no_storage_paranoia", setup_storage_paranoia);
 */
 void efi_delete_dummy_variable(void)
 {
-	efi.set_variable_nonblocking((efi_char16_t *)efi_dummy_name,
+/*	efi.set_variable_nonblocking((efi_char16_t *)efi_dummy_name,
 				     &EFI_DUMMY_GUID,
 				     EFI_VARIABLE_NON_VOLATILE |
 				     EFI_VARIABLE_BOOTSERVICE_ACCESS |
-				     EFI_VARIABLE_RUNTIME_ACCESS, 0, NULL);
+				     EFI_VARIABLE_RUNTIME_ACCESS, 0, NULL);*/
 }
 
 /*
@@ -183,7 +183,7 @@ efi_status_t efi_query_variable_store(u32 attributes, unsigned long size,
 		if (!dummy)
 			return EFI_OUT_OF_RESOURCES;
 
-		status = efi.set_variable((efi_char16_t *)efi_dummy_name,
+/*		status = efi.set_variable((efi_char16_t *)efi_dummy_name,
 					  &EFI_DUMMY_GUID,
 					  EFI_VARIABLE_NON_VOLATILE |
 					  EFI_VARIABLE_BOOTSERVICE_ACCESS |
@@ -191,13 +191,9 @@ efi_status_t efi_query_variable_store(u32 attributes, unsigned long size,
 					  dummy_size, dummy);
 
 		if (status == EFI_SUCCESS) {
-			/*
-			 * This should have failed, so if it didn't make sure
-			 * that we delete it...
-			 */
 			efi_delete_dummy_variable();
 		}
-
+*/
 		kfree(dummy);
 
 		/*

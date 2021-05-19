@@ -2691,8 +2691,9 @@ static int sof_dai_load(struct snd_soc_component *scomp, int index,
 		goto capture;
 
 	stream = SNDRV_PCM_STREAM_PLAYBACK;
+	spcm->stream[stream].d0i3_compatible = 1;
 
-	dev_vdbg(scomp->dev, "tplg: pcm %s stream tokens: playback d0i3:%d\n",
+	dev_dbg(scomp->dev, "tplg: pcm %s stream tokens: playback d0i3:%d\n",
 		 spcm->pcm.pcm_name, spcm->stream[stream].d0i3_compatible);
 
 	caps = &spcm->pcm.caps[stream];

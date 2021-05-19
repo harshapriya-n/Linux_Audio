@@ -944,12 +944,17 @@ void hda_dsp_d0i3_work(struct work_struct *work)
 
 	target_state.state = SOF_DSP_PM_D0;
 
+	dev_dbg(sdev->dev, "harsha test hda_dsp_d0i3_work\n");
 	/* DSP can enter D0I3 iff only D0I3-compatible streams are active */
-	if (snd_sof_dsp_only_d0i3_compatible_stream_active(sdev))
+	if (snd_sof_dsp_only_d0i3_compatible_stream_active(sdev)) {
+		dev_dbg(sdev->dev, "harsha snd_sof_dsp_only_d0i3_compatible_stream_active is true\n");
 		target_state.substate = SOF_HDA_DSP_PM_D0I3;
-	else
+
+	} else
 		target_state.substate = SOF_HDA_DSP_PM_D0I0;
 
+//	dev_dbg(sdev->dev, "harsha forcing d0i3\n");
+//	target_state.substate = SOF_HDA_DSP_PM_D0I3;
 	/* remain in D0I0 */
 	if (target_state.substate == SOF_HDA_DSP_PM_D0I0)
 		return;
